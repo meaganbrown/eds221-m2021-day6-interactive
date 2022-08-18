@@ -1,0 +1,272 @@
+---
+title: "day6-wrangling"
+author: "Meagan Brown"
+date: '2022-08-15'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(janitor)
+library(here)
+```
+
+## Read in the world bank data files
+
+```{r}
+wb_indicators <- read_csv(here("data", "wb_indicators.csv"), 
+                          na = c("..", "")) 
+```
+
+## Tidy up my data
+
+```{r}
+
+wb_indicators_long <- wb_indicators %>% 
+  pivot_longer(cols = '2001 [YR2001]':'2020 [YR2020]',
+               names_to = "year",
+               values_to = "indicator_value")
+
+```
+
+### Separate to clean up year column
+
+```{r}
+wb_clean <- wb_indicators_long %>% 
+  separate(col = year,
+           into = c("year",
+                    "year_chr"),
+           sep = " ") %>% 
+  select(-year_chr, 
+         -'Country Code', 
+         -'Series Code') %>% 
+  mutate(year = as.numeric(year)) %>% 
+  drop_na('Series Name')
+```
+
+## Pivoting Wider
+
+```{r}
+wb_indicators_wide <- wb_clean %>% 
+  pivot_wider(names_from = 'Series Name',
+              values_from = 'indicator_value') 
+```
+
+## Renaming
+
+```{r}
+names(wb_indicators_wide) <- c("country",
+                     "year",
+                     "acces_clean_fuels_pp",
+                     "access_electricity_pp",
+                     "co2_emissions_kt",
+                     "fossil_fuel_cons_pct",
+                     "water_stress")
+
+wb_subset <- wb_indicators_wide %>% 
+  filter(country %in% c("Algeria",
+                        "Barbados",
+                        "Bulgaria",
+                        "Chile"))
+
+ggplot(data = wb_subset,
+       aes(x = year,
+           y = co2_emissions_kt,
+           group = country)) +
+  geom_line(aes(color = country)) +
+  facet_wrap(~country)
+```
+
+## filtering rows
+
+Example 1: Filter to only keep exact matches
+
+```{r}
+ex_1 <- starwars %>% 
+  filter(height > 180)
+```
+
+```{r}
+ex_2 <- starwars %>% 
+  filter(eye_color == "blue")
+```
+
+```{r}
+ex_3 <- starwars %>% 
+  filter(homeworld == "Naboo")
+```
+
+```{r}
+ex_4 <- starwars %>% 
+  filter(height > 180 & homeworld == "Tatooine")
+```
+
+```{r}
+ex_5 <- starwars %>% 
+  filter(hair_color == "brown" & species == "Human")
+
+```
+
+```{r}
+ex_6 <- starwars %>% 
+  filter(height > 180 | eye_color == "yellow")
+```
+
+```{r}
+ex_7 <- starwars %>% 
+  filter(species == "Droid" | homeworld == "Endor")
+```
+
+```{r}
+ex_8 <- starwars %>% 
+  filter(eye_color %in% c("blue",
+                          "red",
+                          "yellow"))
+
+ex_10 <- starwars %>% 
+  filter(homeworld %in% c("Endor", 
+                          "Tatooine", 
+                          "Naboo"),
+         height < 150)
+
+ex_12 <- starwars %>% 
+  filter(species != "human")
+
+ex_13 <- starwars %>% 
+  filter(!species %in% c("Human",
+                         "Ewok",
+                         "Wookie"))
+```
+
+## 'select()': select or exclude columns
+
+```{r}
+
+ex_14 <- wb_indicators_wide %>% 
+  select(year:fossil_fuel_cons_pct)
+
+ex_16 <- wb_indicators_wide %>% 
+  select(year:fossil_fuel_cons_pct, -access_electricity_pp)
+
+```
+
+```{r}
+ex_17 <- wb_indicators_wide %>% 
+  filter(country %in% c("Bolivia",
+                        "Chile",
+                        "Mexico")) %>% 
+  select(country:fossil_fuel_cons_pct)
+```
+
+```{r}
+ex_18 <- wb_indicators_wide %>% 
+  select(year_new = year,
+         emissions = co2_emissions_kt,
+         country_name = country) 
+
+ex_19 <- wb_indicators_wide %>% 
+  select(year, 
+         country, 
+         water_stress) %>% 
+  filter(country %in% c("Australia", 
+                        "Aruba", 
+                        "Lebanon")) %>% 
+  drop_na()
+
+```
+
+### `rename`
+
+```{r}
+ex_20 <- wb_indicators_wide %>% 
+  rename(ffcp = fossil_fuel_cons_pct,
+         ws = water_stress)
+```
+
+```{r}
+ex_21 <- wb_indicators_wide %>% 
+  rename(acfpp = access_electricity_pp)
+```
+
+### `mutate()`: update an existing column, or add a new one
+
+If you assign a NEW column name, it will add a new column to the end of your data frame. IF you assign an existing column name it will overwrite that column.
+
+```{r}
+#converting emissions from kt to t
+ex_22 <- wb_indicators_wide %>% 
+  mutate(co2_emissions_t = co2_emissions_kt * 1000) %>% 
+  relocate(co2_emissions_t, .after = co2_emissions_kt)
+
+#creating a new column named `yay` with values `YAY`
+ex_23 <- wb_indicators_wide %>% 
+  mutate(yay = "YAY")
+
+#converting to charcater
+ex_24 <- wb_indicators_wide %>% 
+  mutate(year = as.character(year))
+
+#converting to numeric
+ex_25 <- ex_24 %>% 
+  mutate(year = as.numeric(year))
+
+#relocating water_stress column to be after year column, can also use .before
+ex_26 <- wb_indicators_wide %>% 
+  relocate(water_stress, 
+           .after = year)
+```
+
+### `group_by` and `summarize()`
+
+`group_by`: Creates groups under the hood based on variables you specify
+
+`summarize()`: apply yout funvtions to EACH GROUP, and return them in a nice summary table
+
+```{r}
+ex_27 <- starwars %>% 
+  filter(homeworld %in% c("Naboo", "Tatooine")) %>% 
+  group_by(species, homeworld) %>% 
+  summarize(mean_height = mean(height, na.rm = TRUE),
+            mean_mass = mean(mass, na.rm = TRUE))
+```
+
+## Case table (each observation has its own row)
+```{r}
+df <- tribble(
+  ~species, ~length, ~number,
+  "lobster", 12, 4,
+  "lobster", 14, 6,
+  "lobster", 15, 2
+)
+
+df_case <- df %>% 
+  uncount(number)
+
+# Count function counts observations
+# Combination of group_by summarize n()
+starwars %>% 
+  count(homeworld, species) 
+
+starwars %>% 
+  group_by(homeworld, species) %>% 
+  summarize(size = n(),
+            mean_height = mean(height, na.rm = TRUE))
+
+```
+
+```{r}
+practice <- wb_indicators_wide %>% 
+  filter(country %in% c("Nicaragua",
+                        "Ecuador",
+                        "Peru",
+                        "Chile"),
+                       year > 2005) %>% 
+  select(country, year, co2_emissions_kt) %>% 
+  mutate(co2_emissions_mt = co2_emissions_kt / 1000) %>% 
+  group_by(country) %>% 
+  summarize(co2_emissions_mt = sum(co2_emissions_mt, na.rm = TRUE))
+  
+```
+
